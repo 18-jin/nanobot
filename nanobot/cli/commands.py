@@ -165,7 +165,7 @@ def auth_import_openclaw(
     set_model: bool = typer.Option(
         True,
         "--set-model/--keep-model",
-        help="Set default model to openai/gpt-5.3-codex",
+        help="Set default model to openai/gpt-5.1-codex",
     ),
 ):
     """Reuse OpenClaw's OpenAI Codex OAuth login for nanobot."""
@@ -186,14 +186,14 @@ def auth_import_openclaw(
     config.providers.openai.api_key = ""
 
     if set_model:
-        config.agents.defaults.model = "openai/gpt-5.3-codex"
+        config.agents.defaults.model = "openai/gpt-5.1-codex"
 
     save_config(config)
 
     console.print("[green]✓[/green] Imported OpenClaw OAuth integration")
     console.print(f"OpenClaw auth file: [cyan]{auth_file}[/cyan]")
     if set_model:
-        console.print("Default model set to [cyan]openai/gpt-5.3-codex[/cyan]")
+        console.print("Default model set to [cyan]openai/gpt-5.1-codex[/cyan]")
     console.print("\nTry: [cyan]nanobot agent -m \"hello\"[/cyan]")
 
 
