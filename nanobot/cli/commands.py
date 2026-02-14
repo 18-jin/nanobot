@@ -148,6 +148,56 @@ def main(
 
 
 # ============================================================================
+# Auth Commands
+# ============================================================================
+
+auth_app = typer.Typer(help="Manage model authentication")
+app.add_typer(auth_app, name="auth")
+
+
+@auth_app.command("import-openclaw")
+def auth_import_openclaw(
+    auth_file: str = typer.Option(
+        "/config/.openclaw/agents/main/agent/auth-profiles.json",
+        "--auth-file",
+        help="Path to OpenClaw auth-profiles.json",
+    ),
+    set_model: bool = typer.Option(
+        True,
+        "--set-model/--keep-model",
+        help="Set default model to openai/gpt-5.3-codex",
+    ),
+):
+    """Reuse OpenClaw's OpenAI Codex OAuth login for nanobot."""
+    from nanobot.config.loader import load_config, save_config
+    from nanobot.providers.openclaw_oauth import OpenClawOAuthError, load_openai_codex_access_token
+
+    try:
+        _ = load_openai_codex_access_token(auth_file)
+    except OpenClawOAuthError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    config = load_config()
+    config.providers.openai.use_openclaw_oauth = True
+    config.providers.openai.openclaw_auth_path = auth_file
+
+    # Avoid stale/broken API key precedence by clearing explicit key.
+    config.providers.openai.api_key = ""
+
+    if set_model:
+        config.agents.defaults.model = "openai/gpt-5.3-codex"
+
+    save_config(config)
+
+    console.print("[green]✓[/green] Imported OpenClaw OAuth integration")
+    console.print(f"OpenClaw auth file: [cyan]{auth_file}[/cyan]")
+    if set_model:
+        console.print("Default model set to [cyan]openai/gpt-5.3-codex[/cyan]")
+    console.print("\nTry: [cyan]nanobot agent -m \"hello\"[/cyan]")
+
+
+# ============================================================================
 # Onboard / Setup
 # ============================================================================
 
@@ -281,18 +331,32 @@ This file stores important information that should persist across sessions.
 def _make_provider(config):
     """Create LiteLLMProvider from config. Exits if no API key found."""
     from nanobot.providers.litellm_provider import LiteLLMProvider
+    from nanobot.providers.openclaw_oauth import OpenClawOAuthError, load_openai_codex_access_token
+
     p = config.get_provider()
+    provider_name = config.get_provider_name()
     model = config.agents.defaults.model
-    if not (p and p.api_key) and not model.startswith("bedrock/"):
+
+    resolved_api_key = p.api_key if p else None
+    if not resolved_api_key and p and provider_name == "openai" and p.use_openclaw_oauth:
+        try:
+            resolved_api_key = load_openai_codex_access_token(p.openclaw_auth_path)
+        except OpenClawOAuthError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            console.print("Run [cyan]nanobot auth import-openclaw[/cyan] or set providers.openai.apiKey manually.")
+            raise typer.Exit(1)
+
+    if not resolved_api_key and not model.startswith("bedrock/"):
         console.print("[red]Error: No API key configured.[/red]")
         console.print("Set one in ~/.nanobot/config.json under providers section")
         raise typer.Exit(1)
+
     return LiteLLMProvider(
-        api_key=p.api_key if p else None,
+        api_key=resolved_api_key,
         api_base=config.get_api_base(),
         default_model=model,
         extra_headers=p.extra_headers if p else None,
-        provider_name=config.get_provider_name(),
+        provider_name=provider_name,
     )
 
 

@@ -131,6 +131,26 @@ nanobot agent -m "What is 2+2?"
 
 That's it! You have a working AI assistant in 2 minutes.
 
+## 🔐 Reuse OpenClaw ChatGPT OAuth (OpenAI Codex)
+
+If you've already logged in with OpenClaw (`openai-codex` OAuth), nanobot can reuse that login
+without copying tokens manually.
+
+```bash
+nanobot auth import-openclaw
+```
+
+This command will:
+- validate your OpenClaw auth store (`/config/.openclaw/agents/main/agent/auth-profiles.json`)
+- enable `providers.openai.useOpenclawOauth`
+- set default model to `openai/gpt-5.3-codex`
+
+Then test:
+
+```bash
+nanobot agent -m "hello"
+```
+
 ## 🖥️ Local Models (vLLM)
 
 Run nanobot with your own local models using vLLM or any OpenAI-compatible server.

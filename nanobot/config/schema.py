@@ -175,6 +175,9 @@ class ProviderConfig(BaseModel):
     api_key: str = ""
     api_base: str | None = None
     extra_headers: dict[str, str] | None = None  # Custom headers (e.g. APP-Code for AiHubMix)
+    # For OpenAI provider only: reuse OAuth token from OpenClaw auth store.
+    use_openclaw_oauth: bool = False
+    openclaw_auth_path: str | None = None
 
 
 class ProvidersConfig(BaseModel):
@@ -236,6 +239,13 @@ class Config(BaseSettings):
         """Get expanded workspace path."""
         return Path(self.agents.defaults.workspace).expanduser()
     
+    def _has_provider_credentials(self, provider_name: str, p: "ProviderConfig") -> bool:
+        """Whether a provider has credentials configured."""
+        if p.api_key:
+            return True
+        # OpenAI can optionally reuse OAuth token managed by OpenClaw.
+        return provider_name == "openai" and bool(p.use_openclaw_oauth)
+
     def _match_provider(self, model: str | None = None) -> tuple["ProviderConfig | None", str | None]:
         """Match provider config and its registry name. Returns (config, spec_name)."""
         from nanobot.providers.registry import PROVIDERS
@@ -244,13 +254,13 @@ class Config(BaseSettings):
         # Match by keyword (order follows PROVIDERS registry)
         for spec in PROVIDERS:
             p = getattr(self.providers, spec.name, None)
-            if p and any(kw in model_lower for kw in spec.keywords) and p.api_key:
+            if p and any(kw in model_lower for kw in spec.keywords) and self._has_provider_credentials(spec.name, p):
                 return p, spec.name
 
         # Fallback: gateways first, then others (follows registry order)
         for spec in PROVIDERS:
             p = getattr(self.providers, spec.name, None)
-            if p and p.api_key:
+            if p and self._has_provider_credentials(spec.name, p):
                 return p, spec.name
         return None, None
 
