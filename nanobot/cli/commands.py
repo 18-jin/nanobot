@@ -165,7 +165,7 @@ def auth_import_openclaw(
     set_model: bool = typer.Option(
         True,
         "--set-model/--keep-model",
-        help="Set default model to openai/gpt-5.1-codex",
+        help="Set default model to openai/gpt-5.3-codex",
     ),
 ):
     """Reuse OpenClaw's OpenAI Codex OAuth login for nanobot."""
@@ -180,20 +180,21 @@ def auth_import_openclaw(
 
     config = load_config()
     config.providers.openai.use_openclaw_oauth = True
+    config.providers.openai.use_codex_cli_bridge = True
     config.providers.openai.openclaw_auth_path = auth_file
 
     # Avoid stale/broken API key precedence by clearing explicit key.
     config.providers.openai.api_key = ""
 
     if set_model:
-        config.agents.defaults.model = "openai/gpt-5.1-codex"
+        config.agents.defaults.model = "openai/gpt-5.3-codex"
 
     save_config(config)
 
     console.print("[green]✓[/green] Imported OpenClaw OAuth integration")
     console.print(f"OpenClaw auth file: [cyan]{auth_file}[/cyan]")
     if set_model:
-        console.print("Default model set to [cyan]openai/gpt-5.1-codex[/cyan]")
+        console.print("Default model set to [cyan]openai/gpt-5.3-codex[/cyan]")
     console.print("\nTry: [cyan]nanobot agent -m \"hello\"[/cyan]")
 
 
@@ -330,6 +331,7 @@ This file stores important information that should persist across sessions.
 
 def _make_provider(config):
     """Create LiteLLMProvider from config. Exits if no API key found."""
+    from nanobot.providers.codex_cli_provider import CodexCliProvider
     from nanobot.providers.litellm_provider import LiteLLMProvider
     from nanobot.providers.openclaw_oauth import OpenClawOAuthError, load_openai_codex_access_token
 
@@ -341,13 +343,20 @@ def _make_provider(config):
     resolved_api_key = p.api_key if p else None
     if p and provider_name == "openai" and p.use_openclaw_oauth:
         oauth_resolver = lambda: load_openai_codex_access_token(p.openclaw_auth_path)
+        try:
+            _ = oauth_resolver()
+        except OpenClawOAuthError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            console.print("Run [cyan]nanobot auth import-openclaw[/cyan] or set providers.openai.apiKey manually.")
+            raise typer.Exit(1)
+
+        # ChatGPT OAuth is not an OpenAI API key. Route through local Codex CLI bridge.
+        if p.use_codex_cli_bridge:
+            return CodexCliProvider(default_model=model)
+
         if not resolved_api_key:
-            try:
-                resolved_api_key = oauth_resolver()
-            except OpenClawOAuthError as e:
-                console.print(f"[red]Error:[/red] {e}")
-                console.print("Run [cyan]nanobot auth import-openclaw[/cyan] or set providers.openai.apiKey manually.")
-                raise typer.Exit(1)
+            # Back-compat: allow legacy behavior if explicitly requested.
+            resolved_api_key = oauth_resolver()
 
     if not resolved_api_key and not model.startswith("bedrock/"):
         console.print("[red]Error: No API key configured.[/red]")

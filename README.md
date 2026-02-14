@@ -143,7 +143,14 @@ nanobot auth import-openclaw
 This command will:
 - validate your OpenClaw auth store (`/config/.openclaw/agents/main/agent/auth-profiles.json`)
 - enable `providers.openai.useOpenclawOauth`
-- set default model to `openai/gpt-5.1-codex`
+- enable `providers.openai.useCodexCliBridge` (routes requests through local `codex exec`)
+- set default model to `openai/gpt-5.3-codex`
+
+If `codex` is not logged in yet, run:
+
+```bash
+codex login
+```
 
 Then test:
 

@@ -175,9 +175,11 @@ class ProviderConfig(BaseModel):
     api_key: str = ""
     api_base: str | None = None
     extra_headers: dict[str, str] | None = None  # Custom headers (e.g. APP-Code for AiHubMix)
-    # For OpenAI provider only: reuse OAuth token from OpenClaw auth store.
+    # For OpenAI provider only: reuse OAuth context from OpenClaw auth store.
     use_openclaw_oauth: bool = False
     openclaw_auth_path: str | None = None
+    # Route requests through local Codex CLI (OAuth-backed), not OpenAI API key.
+    use_codex_cli_bridge: bool = False
 
 
 class ProvidersConfig(BaseModel):
