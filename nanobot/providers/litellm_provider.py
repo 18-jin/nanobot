@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import Any
+from typing import Any, Callable
 
 import litellm
 from litellm import acompletion
@@ -21,16 +21,18 @@ class LiteLLMProvider(LLMProvider):
     """
     
     def __init__(
-        self, 
-        api_key: str | None = None, 
+        self,
+        api_key: str | None = None,
         api_base: str | None = None,
         default_model: str = "anthropic/claude-opus-4-5",
         extra_headers: dict[str, str] | None = None,
         provider_name: str | None = None,
+        api_key_resolver: Callable[[], str | None] | None = None,
     ):
         super().__init__(api_key, api_base)
         self.default_model = default_model
         self.extra_headers = extra_headers or {}
+        self.api_key_resolver = api_key_resolver
         
         # Detect gateway / local deployment.
         # provider_name (from config key) is the primary signal;
@@ -136,9 +138,16 @@ class LiteLLMProvider(LLMProvider):
         # Apply model-specific overrides (e.g. kimi-k2.5 temperature)
         self._apply_model_overrides(model, kwargs)
         
-        # Pass api_key directly — more reliable than env vars alone
-        if self.api_key:
-            kwargs["api_key"] = self.api_key
+        # Pass api_key directly — more reliable than env vars alone.
+        resolved_api_key = self.api_key
+        if self.api_key_resolver:
+            try:
+                resolved_api_key = self.api_key_resolver() or resolved_api_key
+            except Exception:
+                # Keep last known key if resolver fails transiently.
+                pass
+        if resolved_api_key:
+            kwargs["api_key"] = resolved_api_key
         
         # Pass api_base for custom endpoints
         if self.api_base:

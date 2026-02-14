@@ -337,14 +337,17 @@ def _make_provider(config):
     provider_name = config.get_provider_name()
     model = config.agents.defaults.model
 
+    oauth_resolver = None
     resolved_api_key = p.api_key if p else None
-    if not resolved_api_key and p and provider_name == "openai" and p.use_openclaw_oauth:
-        try:
-            resolved_api_key = load_openai_codex_access_token(p.openclaw_auth_path)
-        except OpenClawOAuthError as e:
-            console.print(f"[red]Error:[/red] {e}")
-            console.print("Run [cyan]nanobot auth import-openclaw[/cyan] or set providers.openai.apiKey manually.")
-            raise typer.Exit(1)
+    if p and provider_name == "openai" and p.use_openclaw_oauth:
+        oauth_resolver = lambda: load_openai_codex_access_token(p.openclaw_auth_path)
+        if not resolved_api_key:
+            try:
+                resolved_api_key = oauth_resolver()
+            except OpenClawOAuthError as e:
+                console.print(f"[red]Error:[/red] {e}")
+                console.print("Run [cyan]nanobot auth import-openclaw[/cyan] or set providers.openai.apiKey manually.")
+                raise typer.Exit(1)
 
     if not resolved_api_key and not model.startswith("bedrock/"):
         console.print("[red]Error: No API key configured.[/red]")
@@ -357,6 +360,7 @@ def _make_provider(config):
         default_model=model,
         extra_headers=p.extra_headers if p else None,
         provider_name=provider_name,
+        api_key_resolver=oauth_resolver,
     )
 
 
